@@ -109,10 +109,14 @@ async function orNull<T>(promise: Promise<T>): Promise<T | null> {
   }
 }
 
+interface AdzunaAd {
+  category?: { tag?: string; label?: string };
+}
+
 interface SearchResponse {
   count: number;
   mean?: number;
-  results?: { category?: { tag?: string; label?: string } }[];
+  results?: AdzunaAd[];
 }
 
 interface HistogramResponse {
@@ -139,12 +143,15 @@ function searchCount(title: string, maxDaysOld?: number) {
   return withRetry(() => adzunaFetch<SearchResponse>("search/1", params));
 }
 
-/** Total-count search that also samples 10 postings to derive the category. */
-function searchWithCategory(title: string) {
+/**
+ * Total-count search that also returns 50 postings, used to derive the
+ * dominant category.
+ */
+function searchWithResults(title: string) {
   return withRetry(() =>
     adzunaFetch<SearchResponse>("search/1", {
       what: title,
-      results_per_page: "10",
+      results_per_page: "50",
     })
   );
 }
@@ -170,7 +177,7 @@ function modalCategory(response: SearchResponse): AdzunaCategory | null {
 export async function fetchTitleCategory(
   title: string
 ): Promise<AdzunaCategory | null> {
-  return modalCategory(await searchWithCategory(title));
+  return modalCategory(await searchWithResults(title));
 }
 
 /** One-call US-wide posting count for a title (used for adjacent titles). */
@@ -186,7 +193,7 @@ export async function fetchPostingCount(title: string): Promise<number> {
 export async function fetchJobsData(title: string): Promise<JobsPayload> {
   const [total, last3, last6, last12, geodata, histogram, history] =
     await Promise.all([
-      searchWithCategory(title),
+      searchWithResults(title),
       searchCount(title, 90),
       searchCount(title, 180),
       searchCount(title, 365),
@@ -199,8 +206,8 @@ export async function fetchJobsData(title: string): Promise<JobsPayload> {
       orNull(
         withRetry(() =>
           adzunaFetch<HistoryResponse>("history", {
-            what: title,
             months: "12",
+            what: title,
           })
         )
       ),

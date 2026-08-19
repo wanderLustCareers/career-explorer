@@ -2,37 +2,23 @@
 
 import { useState, type FormEvent } from "react";
 
-type Status = "idle" | "searching" | "error";
+interface SearchFormProps {
+  onSearch: (title: string) => void;
+  busy: boolean;
+}
 
-export default function SearchForm() {
+export default function SearchForm({ onSearch, busy }: SearchFormProps) {
   const [title, setTitle] = useState("");
-  const [status, setStatus] = useState<Status>("idle");
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const query = title.trim();
-    if (!query || status === "searching") return;
-
-    setStatus("searching");
-    try {
-      const res = await fetch(`/api/jobs?title=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      if (!res.ok) {
-        console.error("[career-explorer] /api/jobs error:", data);
-        setStatus("error");
-        return;
-      }
-      // Results view arrives in a later chunk; for now, log the payload.
-      console.log("[career-explorer] /api/jobs response:", data);
-      setStatus("idle");
-    } catch (error) {
-      console.error("[career-explorer] /api/jobs request failed:", error);
-      setStatus("error");
-    }
+    if (!query || busy) return;
+    onSearch(query);
   }
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-xl">
+    <form onSubmit={handleSubmit} className="w-full">
       <div className="relative">
         <input
           type="text"
@@ -45,7 +31,7 @@ export default function SearchForm() {
         <button
           type="submit"
           aria-label="Search"
-          disabled={status === "searching"}
+          disabled={busy}
           className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-teal outline-none hover:bg-teal-tint focus-visible:ring-2 focus-visible:ring-teal disabled:opacity-50"
         >
           <svg
@@ -63,11 +49,6 @@ export default function SearchForm() {
           </svg>
         </button>
       </div>
-      <p className="mt-3 h-5 text-center text-sm text-slate" role="status">
-        {status === "searching" && "Searching..."}
-        {status === "error" &&
-          "Job data is temporarily unavailable. Try again shortly."}
-      </p>
     </form>
   );
 }
