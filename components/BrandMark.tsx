@@ -1,5 +1,8 @@
 import Image from "next/image";
 
+// Transparent PNG — avoids the baked-in white box from the JPG on Vercel.
+const LOGO_WITH_TEXT = "/wanderlust_careers_logo_with_text.png";
+
 interface BrandMarkProps {
   compact?: boolean;
 }
@@ -9,11 +12,12 @@ export default function BrandMark({ compact = false }: BrandMarkProps) {
     return (
       <div className="flex items-center gap-3">
         <Image
-          src="/wanderlust-mark.jpg"
+          src={LOGO_WITH_TEXT}
           alt="Wanderlust Careers"
-          width={120}
+          width={60}
           height={32}
-          className="h-8 w-auto bg-canvas object-contain mix-blend-multiply"
+          unoptimized
+          className="h-8 w-auto object-contain"
           priority
         />
         <div className="hidden h-6 w-px bg-teal-tint sm:block" aria-hidden="true" />
@@ -25,11 +29,12 @@ export default function BrandMark({ compact = false }: BrandMarkProps) {
   return (
     <div className="flex flex-col items-center gap-5">
       <Image
-        src="/wanderlust-mark.jpg"
+        src={LOGO_WITH_TEXT}
         alt="Wanderlust Careers"
-        width={280}
+        width={139}
         height={74}
-        className="h-[74px] w-auto bg-canvas object-contain mix-blend-multiply"
+        unoptimized
+        className="h-[74px] w-auto object-contain"
         priority
       />
       <p className="font-display text-5xl text-ink">Career Explorer</p>
