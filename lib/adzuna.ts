@@ -32,6 +32,15 @@ export interface JobsPayload {
     months12: number;
   };
   /**
+   * Live postings grouped by listing age, oldest month first.
+   * Each point is currently-open ads posted in that ~30-day window (the
+   * difference of Adzuna `max_days_old` cumulatives). Adzuna's history
+   * endpoint only returns salary, not vacancy counts, so this is the
+   * monthly series we can actually plot. Absent on rows cached before
+   * this field existed.
+   */
+  monthlyCounts?: { month: string; count: number }[];
+  /**
    * Salary distribution: bucket lower bound (e.g. "60000") -> posting count.
    * Adzuna mixes advertised and estimated salaries here, so the UI labels
    * salary figures as estimated (FR6). Null if the endpoint failed.
@@ -185,18 +194,45 @@ export async function fetchPostingCount(title: string): Promise<number> {
   return (await searchCount(title)).count;
 }
 
+/** Rolling ~30-day windows used to reconstruct a 12-month posting series. */
+const MONTH_WINDOWS_DAYS = [
+  30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 365,
+] as const;
+
+function monthLabel(monthsAgo: number): string {
+  const date = new Date();
+  date.setMonth(date.getMonth() - monthsAgo);
+  return date.toLocaleString("en-US", { month: "short" });
+}
+
+/**
+ * Split cumulative `max_days_old` counts into per-month live-posting buckets,
+ * oldest month first so the chart reads left-to-right through time.
+ */
+function monthlyFromCumulative(
+  cumulatives: number[]
+): { month: string; count: number }[] {
+  const points: { month: string; count: number }[] = [];
+  for (let i = cumulatives.length - 1; i >= 0; i--) {
+    const younger = i === 0 ? 0 : cumulatives[i - 1];
+    points.push({
+      month: monthLabel(i),
+      count: Math.max(0, cumulatives[i] - younger),
+    });
+  }
+  return points;
+}
+
 /**
  * Fetches everything the dashboard needs for one title.
- * Makes 7 Adzuna calls in parallel — the 24h cache (FR2) keeps this within
+ * Makes 16 Adzuna calls in parallel (12 monthly count windows + total,
+ * geodata, histogram, history). The 24h cache (FR2) keeps this within
  * the ~1,000 calls/month free tier.
  */
 export async function fetchJobsData(title: string): Promise<JobsPayload> {
-  const [total, last3, last6, last12, geodata, histogram, history] =
+  const [total, geodata, histogram, history, ...monthResults] =
     await Promise.all([
       searchWithResults(title),
-      searchCount(title, 90),
-      searchCount(title, 180),
-      searchCount(title, 365),
       withRetry(() => adzunaFetch<GeodataResponse>("geodata", { what: title })),
       orNull(
         withRetry(() =>
@@ -211,6 +247,7 @@ export async function fetchJobsData(title: string): Promise<JobsPayload> {
           })
         )
       ),
+      ...MONTH_WINDOWS_DAYS.map((days) => searchCount(title, days)),
     ]);
 
   const states = (geodata.locations ?? [])
@@ -219,16 +256,19 @@ export async function fetchJobsData(title: string): Promise<JobsPayload> {
     .map((entry) => ({ state: entry.location.area[1], count: entry.count }))
     .sort((a, b) => b.count - a.count);
 
+  const cumulatives = monthResults.map((result) => result.count);
+
   return {
     title,
     category: modalCategory(total),
     totalCount: total.count,
     meanSalary: total.mean ?? null,
     counts: {
-      months3: last3.count,
-      months6: last6.count,
-      months12: last12.count,
+      months3: cumulatives[2] ?? 0,
+      months6: cumulatives[5] ?? 0,
+      months12: cumulatives[11] ?? 0,
     },
+    monthlyCounts: monthlyFromCumulative(cumulatives),
     salaryHistogram: histogram?.histogram ?? null,
     salaryHistoryByMonth: history?.month ?? null,
     states,

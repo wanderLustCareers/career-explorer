@@ -13,9 +13,11 @@ export async function GET(request: NextRequest) {
 
   const title = normalizeTitle(rawTitle);
 
-  // 1. Fresh cache hit? Return it directly.
+  // 1. Fresh cache hit? Return it directly — but only if it already has
+  // the monthly series the trend chart needs. Older rows are treated as
+  // stale so the next search backfills without waiting out the 24h TTL.
   const cached = await readFreshRow<JobsPayload>(title);
-  if (cached) {
+  if (cached?.results.monthlyCounts && cached.results.monthlyCounts.length > 0) {
     return NextResponse.json({
       ...cached.results,
       fetchedAt: cached.fetchedAt,

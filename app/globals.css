@@ -12,4 +12,19 @@
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-fraunces), Georgia, serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  /* PRD §13.1 motion: cards fade/slide up ~400ms on search resolve, same
+     beat as the map's grow-in. No motion anywhere else. */
+  --animate-rise: rise 400ms cubic-bezier(0.33, 1, 0.68, 1) both;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }

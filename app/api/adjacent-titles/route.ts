@@ -7,14 +7,9 @@ import {
   type JobsPayload,
 } from "@/lib/adzuna";
 import { readFreshRow, readFreshRows, writeCacheRow } from "@/lib/cache";
-import { CATEGORY_TITLES } from "@/lib/adjacent-titles";
+import { CATEGORY_TITLES, type AdjacentTitle } from "@/lib/adjacent-titles";
 
 const MAX_SUGGESTIONS = 5; // FR5: 3-5 adjacent titles
-
-interface AdjacentTitle {
-  title: string;
-  count: number;
-}
 
 /**
  * Resolve the title's dominant category, cheapest source first:

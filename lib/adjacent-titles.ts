@@ -9,6 +9,11 @@
  * Keys are Adzuna's exact US category tags (from /v1/api/jobs/us/categories).
  * Titles are pre-normalized (lowercase) to match normalizeTitle() output.
  */
+
+export interface AdjacentTitle {
+  title: string;
+  count: number;
+}
 export const CATEGORY_TITLES: Record<string, string[]> = {
   "accounting-finance-jobs": [
     "accountant",

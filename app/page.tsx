@@ -1,80 +1,190 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import SearchForm from "@/components/SearchForm";
 import JobsMap, { MapSkeleton } from "@/components/JobsMap";
+import TrendChart, { ChartSkeleton } from "@/components/TrendChart";
+import SalarySnapshot, { SalarySkeleton } from "@/components/SalarySnapshot";
+import AdjacentTitles, {
+  AdjacentSkeleton,
+  displayTitle,
+} from "@/components/AdjacentTitles";
+import type { AdjacentTitle } from "@/lib/adjacent-titles";
 import type { JobsPayload } from "@/lib/adzuna";
 
 type JobsResponse = JobsPayload & { fetchedAt: string; cached: boolean };
 
-const FRIENDLY_ERROR = "Job data is temporarily unavailable. Try again shortly.";
+const FRIENDLY_ERROR =
+  "Job data is temporarily unavailable. Try again shortly.";
+
+function broaderTerm(title: string): string | null {
+  const parts = title.trim().split(/\s+/);
+  return parts.length >= 2 ? parts.slice(1).join(" ") : null;
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="flex flex-col gap-6">
+      <MapSkeleton />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <ChartSkeleton />
+        <SalarySkeleton />
+      </div>
+      <AdjacentSkeleton />
+    </div>
+  );
+}
 
 export default function Home() {
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<JobsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [adjacent, setAdjacent] = useState<AdjacentTitle[] | null>(null);
+  const [adjacentLoading, setAdjacentLoading] = useState(false);
+  const requestId = useRef(0);
+  const lastTitle = useRef("");
 
   async function search(title: string) {
+    const query = title.trim();
+    if (!query) return;
+
+    const id = ++requestId.current;
+    lastTitle.current = query;
+    setInput(query);
     setLoading(true);
     setError(null);
+    setAdjacent(null);
+    setAdjacentLoading(true);
+
+    const jobsReq = fetch(`/api/jobs?title=${encodeURIComponent(query)}`);
+    const adjReq = fetch(
+      `/api/adjacent-titles?title=${encodeURIComponent(query)}`
+    );
+
     try {
-      const res = await fetch(`/api/jobs?title=${encodeURIComponent(title)}`);
+      const res = await jobsReq;
       const json = await res.json();
+      if (id !== requestId.current) return;
       if (!res.ok) {
+        setData(null);
         setError(typeof json.error === "string" ? json.error : FRIENDLY_ERROR);
-        return;
+      } else {
+        setData(json as JobsResponse);
       }
-      console.log("[career-explorer] /api/jobs response:", json);
-      setData(json as JobsResponse);
     } catch (err) {
       console.error("[career-explorer] /api/jobs request failed:", err);
+      if (id !== requestId.current) return;
+      setData(null);
       setError(FRIENDLY_ERROR);
     } finally {
-      setLoading(false);
+      if (id === requestId.current) setLoading(false);
+    }
+
+    try {
+      const res = await adjReq;
+      const json = await res.json();
+      if (id !== requestId.current) return;
+      setAdjacent(
+        res.ok && Array.isArray(json.adjacentTitles) ? json.adjacentTitles : []
+      );
+    } catch (err) {
+      console.error("[career-explorer] /api/adjacent-titles request failed:", err);
+      if (id !== requestId.current) return;
+      setAdjacent([]);
+    } finally {
+      if (id === requestId.current) setAdjacentLoading(false);
     }
   }
 
   const searched = loading || data !== null || error !== null;
+  const noResults = data !== null && data.totalCount === 0;
+  const suggestion = adjacent?.[0]?.title ?? broaderTerm(lastTitle.current);
+
+  const searchForm = (
+    <SearchForm
+      value={input}
+      onChange={setInput}
+      onSearch={search}
+      busy={loading}
+    />
+  );
 
   // Pre-search state (PRD §13.2, first wireframe): centered, minimal.
   if (!searched) {
     return (
       <main className="flex flex-1 flex-col items-center justify-center gap-8 px-6">
         <h1 className="font-display text-5xl text-ink">Career Explorer</h1>
-        <div className="w-full max-w-xl">
-          <SearchForm onSearch={search} busy={loading} />
-        </div>
+        <div className="w-full max-w-xl">{searchForm}</div>
       </main>
     );
   }
 
-  // Post-search state (PRD §13.2, second wireframe): search docks to the
-  // top; the map is the dominant, full-width element beneath it.
   return (
     <main className="flex flex-1 flex-col">
       <header className="border-b border-teal-tint">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-6 px-6 py-4">
           <span className="font-display text-xl text-ink">Career Explorer</span>
-          <div className="max-w-xl flex-1">
-            <SearchForm onSearch={search} busy={loading} />
-          </div>
+          <div className="max-w-xl flex-1">{searchForm}</div>
         </div>
       </header>
 
       <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-6">
         {loading ? (
-          <MapSkeleton />
+          <DashboardSkeleton />
         ) : error ? (
-          <p className="py-16 text-center text-slate">{error}</p>
-        ) : data && data.states.length === 0 ? (
-          <p className="py-16 text-center text-slate">
-            No postings found for this title — try a broader term.
-          </p>
+          <div className="flex flex-col items-center py-16 text-center">
+            <p className="text-ink">{error}</p>
+            <button
+              type="button"
+              onClick={() => search(lastTitle.current)}
+              className="mt-4 rounded-xl border border-teal-tint bg-white px-4 py-2 text-sm text-teal outline-none hover:bg-teal-tint focus-visible:ring-2 focus-visible:ring-teal"
+            >
+              Try again
+            </button>
+          </div>
+        ) : noResults ? (
+          <div className="flex flex-col items-center py-16 text-center">
+            <p className="text-ink">
+              No postings found for this title — try a broader term.
+            </p>
+            {adjacentLoading ? (
+              <div className="mt-4 h-9 w-48 animate-pulse rounded-xl bg-teal-tint" />
+            ) : suggestion ? (
+              <button
+                type="button"
+                onClick={() => search(suggestion)}
+                className="mt-4 rounded-xl border border-teal-tint bg-white px-4 py-2 text-sm text-teal outline-none hover:bg-teal-tint focus-visible:ring-2 focus-visible:ring-teal"
+              >
+                Try {displayTitle(suggestion)}
+              </button>
+            ) : null}
+          </div>
         ) : data ? (
-          <JobsMap
-            states={data.states}
-            animationKey={`${data.title}:${data.fetchedAt}`}
-          />
+          <div
+            key={`${data.title}:${data.fetchedAt}`}
+            className="flex animate-rise flex-col gap-6"
+          >
+            <JobsMap
+              states={data.states}
+              animationKey={`${data.title}:${data.fetchedAt}`}
+            />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <TrendChart
+                counts={data.counts}
+                monthlyCounts={data.monthlyCounts}
+              />
+              <SalarySnapshot
+                historyByMonth={data.salaryHistoryByMonth}
+                meanSalary={data.meanSalary}
+              />
+            </div>
+            {adjacentLoading || adjacent === null ? (
+              <AdjacentSkeleton />
+            ) : (
+              <AdjacentTitles titles={adjacent} onSelect={search} />
+            )}
+          </div>
         ) : null}
       </div>
     </main>

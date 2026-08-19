@@ -1,18 +1,23 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { type FormEvent } from "react";
 
 interface SearchFormProps {
+  value: string;
+  onChange: (value: string) => void;
   onSearch: (title: string) => void;
   busy: boolean;
 }
 
-export default function SearchForm({ onSearch, busy }: SearchFormProps) {
-  const [title, setTitle] = useState("");
-
+export default function SearchForm({
+  value,
+  onChange,
+  onSearch,
+  busy,
+}: SearchFormProps) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const query = title.trim();
+    const query = value.trim();
     if (!query || busy) return;
     onSearch(query);
   }
@@ -22,8 +27,8 @@ export default function SearchForm({ onSearch, busy }: SearchFormProps) {
       <div className="relative">
         <input
           type="text"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
           placeholder="Enter a job title..."
           aria-label="Job title"
           className="w-full rounded-xl border border-teal-tint bg-white py-3.5 pl-5 pr-14 text-base text-ink placeholder:text-slate outline-none focus-visible:border-teal focus-visible:ring-2 focus-visible:ring-teal"
