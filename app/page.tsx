@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import SearchForm from "@/components/SearchForm";
 import SignOutButton from "@/components/SignOutButton";
+import BrandMark from "@/components/BrandMark";
 import JobsMap, { MapSkeleton } from "@/components/JobsMap";
 import TrendChart, { ChartSkeleton } from "@/components/TrendChart";
 import SalarySnapshot, { SalarySkeleton } from "@/components/SalarySnapshot";
@@ -41,32 +42,32 @@ function DashboardSkeleton() {
 }
 
 export default function Home() {
+  const [recent, setRecent] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = sessionStorage.getItem(RECENT_KEY);
+      if (!raw) return [];
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        Array.isArray(parsed) &&
+        parsed.every((item) => typeof item === "string")
+      ) {
+        return parsed;
+      }
+    } catch {
+      // Ignore a corrupt session entry; start with an empty list.
+    }
+    return [];
+  });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<JobsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adjacent, setAdjacent] = useState<AdjacentTitle[] | null>(null);
   const [adjacentLoading, setAdjacentLoading] = useState(false);
-  const [recent, setRecent] = useState<string[]>([]);
+  const [lastTitle, setLastTitle] = useState("");
   const requestId = useRef(0);
-  const lastTitle = useRef("");
   const abortRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(RECENT_KEY);
-      if (!raw) return;
-      const parsed: unknown = JSON.parse(raw);
-      if (
-        Array.isArray(parsed) &&
-        parsed.every((item) => typeof item === "string")
-      ) {
-        setRecent(parsed);
-      }
-    } catch {
-      // Ignore a corrupt session entry; start with an empty list.
-    }
-  }, []);
 
   function persistRecent(next: string[]) {
     try {
@@ -102,7 +103,7 @@ export default function Home() {
     if (!query) return;
 
     const id = ++requestId.current;
-    lastTitle.current = query;
+    setLastTitle(query);
     setInput(query);
     rememberSearch(query);
     setLoading(true);
@@ -176,7 +177,7 @@ export default function Home() {
 
   const searched = loading || data !== null || error !== null;
   const noResults = data !== null && data.totalCount === 0;
-  const suggestion = adjacent?.[0]?.title ?? broaderTerm(lastTitle.current);
+  const suggestion = adjacent?.[0]?.title ?? broaderTerm(lastTitle);
 
   const searchForm = (
     <SearchForm
@@ -196,7 +197,7 @@ export default function Home() {
         <div className="absolute right-6 top-4">
           <SignOutButton />
         </div>
-        <h1 className="font-display text-5xl text-ink">Career Explorer</h1>
+        <BrandMark />
         <div className="w-full max-w-xl">{searchForm}</div>
       </main>
     );
@@ -209,9 +210,9 @@ export default function Home() {
           <button
             type="button"
             onClick={goHome}
-            className="font-display text-xl text-ink outline-none hover:text-teal focus-visible:ring-2 focus-visible:ring-teal"
+            className="outline-none hover:text-teal focus-visible:ring-2 focus-visible:ring-teal"
           >
-            Career Explorer
+            <BrandMark compact />
           </button>
           <div className="max-w-xl flex-1">{searchForm}</div>
           <div className="ml-auto shrink-0">
@@ -228,7 +229,7 @@ export default function Home() {
             <p className="text-ink">{error}</p>
             <button
               type="button"
-              onClick={() => search(lastTitle.current)}
+              onClick={() => search(lastTitle)}
               className="mt-4 rounded-xl border border-teal-tint bg-white px-4 py-2 text-sm text-teal outline-none hover:bg-teal-tint focus-visible:ring-2 focus-visible:ring-teal"
             >
               Try again

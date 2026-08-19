@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import { US_MAP_VIEWBOX, US_STATE_PATHS } from "@/lib/us-map-paths";
 
@@ -118,7 +118,6 @@ export default function JobsMap({ states, animationKey }: JobsMapProps) {
   // PRD §13.1 motion: the map fills/grows in over ~400ms on search resolve.
   const [progress, setProgress] = useState(0);
   useEffect(() => {
-    setProgress(0);
     let raf = 0;
     const start = performance.now();
     const tick = (now: number) => {
@@ -130,8 +129,13 @@ export default function JobsMap({ states, animationKey }: JobsMapProps) {
     return () => cancelAnimationFrame(raf);
   }, [animationKey]);
 
-  const countByState = new Map(states.map((s) => [s.state, s.count]));
-  stateCountsRef.current = countByState;
+  const countByState = useMemo(
+    () => new Map(states.map((s) => [s.state, s.count])),
+    [states]
+  );
+  useEffect(() => {
+    stateCountsRef.current = countByState;
+  }, [countByState]);
   const maxStateCount = Math.max(...states.map((s) => s.count), 1);
   const topStateName = states.reduce(
     (best, s) => (s.count > (best?.count ?? 0) ? s : best),
