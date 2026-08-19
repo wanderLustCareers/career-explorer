@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Fraunces, IBM_Plex_Mono, Inter } from "next/font/google";
-import SiteFooter from "@/components/SiteFooter";
 import "./globals.css";
 
 // PRD §13.1 type spec: Fraunces for display/headings only, Inter for body/UI,
@@ -33,9 +32,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${fraunces.variable} ${inter.variable} ${plexMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col bg-canvas font-sans text-ink">
+      <body className="min-h-full flex flex-col bg-canvas font-sans text-ink">
         {children}
-        <SiteFooter />
       </body>
     </html>
   );
