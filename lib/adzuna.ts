@@ -6,10 +6,21 @@
 
 const ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs/us";
 
+export interface AdzunaCategory {
+  tag: string;
+  label: string;
+}
+
 /** The combined per-title payload stored in `cached_searches.results`. */
 export interface JobsPayload {
   /** Normalized title the data was fetched for. */
   title: string;
+  /**
+   * Dominant Adzuna category among the top matching postings — the basis for
+   * adjacent-title matching (PRD §8.3). Null when no postings matched.
+   * Absent (undefined) on rows cached before this field existed.
+   */
+  category?: AdzunaCategory | null;
   /** Total live US postings matching the title. */
   totalCount: number;
   /** Adzuna's mean advertised salary across matching postings, if provided. */
@@ -101,6 +112,7 @@ async function orNull<T>(promise: Promise<T>): Promise<T | null> {
 interface SearchResponse {
   count: number;
   mean?: number;
+  results?: { category?: { tag?: string; label?: string } }[];
 }
 
 interface HistogramResponse {
@@ -127,6 +139,45 @@ function searchCount(title: string, maxDaysOld?: number) {
   return withRetry(() => adzunaFetch<SearchResponse>("search/1", params));
 }
 
+/** Total-count search that also samples 10 postings to derive the category. */
+function searchWithCategory(title: string) {
+  return withRetry(() =>
+    adzunaFetch<SearchResponse>("search/1", {
+      what: title,
+      results_per_page: "10",
+    })
+  );
+}
+
+/** Most frequent category among the sampled postings, or null if none. */
+function modalCategory(response: SearchResponse): AdzunaCategory | null {
+  const tally = new Map<string, { category: AdzunaCategory; hits: number }>();
+  for (const result of response.results ?? []) {
+    const { tag, label } = result.category ?? {};
+    if (!tag || !label) continue;
+    const entry = tally.get(tag) ?? { category: { tag, label }, hits: 0 };
+    entry.hits += 1;
+    tally.set(tag, entry);
+  }
+  let best: { category: AdzunaCategory; hits: number } | null = null;
+  for (const entry of tally.values()) {
+    if (!best || entry.hits > best.hits) best = entry;
+  }
+  return best?.category ?? null;
+}
+
+/** One-call category lookup for a title (used when nothing is cached yet). */
+export async function fetchTitleCategory(
+  title: string
+): Promise<AdzunaCategory | null> {
+  return modalCategory(await searchWithCategory(title));
+}
+
+/** One-call US-wide posting count for a title (used for adjacent titles). */
+export async function fetchPostingCount(title: string): Promise<number> {
+  return (await searchCount(title)).count;
+}
+
 /**
  * Fetches everything the dashboard needs for one title.
  * Makes 7 Adzuna calls in parallel — the 24h cache (FR2) keeps this within
@@ -135,7 +186,7 @@ function searchCount(title: string, maxDaysOld?: number) {
 export async function fetchJobsData(title: string): Promise<JobsPayload> {
   const [total, last3, last6, last12, geodata, histogram, history] =
     await Promise.all([
-      searchCount(title),
+      searchWithCategory(title),
       searchCount(title, 90),
       searchCount(title, 180),
       searchCount(title, 365),
@@ -163,6 +214,7 @@ export async function fetchJobsData(title: string): Promise<JobsPayload> {
 
   return {
     title,
+    category: modalCategory(total),
     totalCount: total.count,
     meanSalary: total.mean ?? null,
     counts: {
