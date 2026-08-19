@@ -214,7 +214,9 @@ export default function Home() {
             Career Explorer
           </button>
           <div className="max-w-xl flex-1">{searchForm}</div>
-          <SignOutButton />
+          <div className="ml-auto shrink-0">
+            <SignOutButton />
+          </div>
         </div>
       </header>
 

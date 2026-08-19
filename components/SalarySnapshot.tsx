@@ -94,8 +94,22 @@ export default function SalarySnapshot({
 
   return (
     <section className="flex h-full min-h-[240px] flex-col rounded-xl border border-teal-tint bg-white p-5">
-      <h2 className="font-display text-lg text-ink">Salary snapshot</h2>
-      <p className="mt-1 text-sm text-slate">Average advertised salary by month</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="font-display text-lg text-ink">Salary snapshot</h2>
+          <p className="mt-1 text-sm text-slate">
+            Average advertised salary by month
+          </p>
+        </div>
+        {meanSalary !== null && (
+          <div className="text-right">
+            <p className="font-mono text-2xl font-medium text-ink">
+              {formatSalary(meanSalary)}
+            </p>
+            <p className="mt-0.5 text-xs text-slate">Typical posted</p>
+          </div>
+        )}
+      </div>
 
       {data.length > 0 ? (
         <div className="mt-4 h-44">
@@ -145,12 +159,7 @@ export default function SalarySnapshot({
           </ResponsiveContainer>
         </div>
       ) : meanSalary !== null ? (
-        <div className="flex flex-1 flex-col justify-center">
-          <p className="font-mono text-3xl font-medium text-ink">
-            {formatSalary(meanSalary)}
-          </p>
-          <p className="mt-2 text-sm text-slate">Typical posted salary</p>
-        </div>
+        <p className="mt-8 text-sm text-slate">No monthly history for this title.</p>
       ) : (
         <p className="mt-8 text-slate">
           Salary data isn&apos;t available for this title.

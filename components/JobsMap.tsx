@@ -207,6 +207,11 @@ export default function JobsMap({ states, animationKey }: JobsMapProps) {
         center={US_CENTER}
         zoom={4}
         onLoad={(loadedMap) => {
+          const width = containerRef.current?.clientWidth ?? 1024;
+          // Zoom 0 = 256px-wide world. Keep the world at least as wide as
+          // the container so tiles don't wrap and the US repeats.
+          const minZoom = Math.max(2, Math.ceil(Math.log2(width / 256)));
+          loadedMap.setOptions({ minZoom });
           setMap(loadedMap);
           loadedMap.data.loadGeoJson("/us-states.geojson", null, () =>
             setGeoReady(true)
@@ -219,6 +224,17 @@ export default function JobsMap({ states, animationKey }: JobsMapProps) {
           zoomControl: true,
           clickableIcons: false,
           backgroundColor: "#FAFAF8",
+          minZoom: 3,
+          maxZoom: 8,
+          restriction: {
+            latLngBounds: {
+              north: 85,
+              south: -85,
+              west: -180,
+              east: 180,
+            },
+            strictBounds: true,
+          },
         }}
       />
 
