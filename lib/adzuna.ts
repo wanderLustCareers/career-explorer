@@ -108,7 +108,7 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Optional data (salary extras) degrades to null instead of failing the search. */
+/** Optional extras (geodata, salary, monthly windows) degrade instead of failing the search. */
 async function orNull<T>(promise: Promise<T>): Promise<T | null> {
   try {
     return await promise;
@@ -233,7 +233,9 @@ export async function fetchJobsData(title: string): Promise<JobsPayload> {
   const [total, geodata, histogram, history, ...monthResults] =
     await Promise.all([
       searchWithResults(title),
-      withRetry(() => adzunaFetch<GeodataResponse>("geodata", { what: title })),
+      orNull(
+        withRetry(() => adzunaFetch<GeodataResponse>("geodata", { what: title }))
+      ),
       orNull(
         withRetry(() =>
           adzunaFetch<HistogramResponse>("histogram", { what: title })
@@ -247,16 +249,16 @@ export async function fetchJobsData(title: string): Promise<JobsPayload> {
           })
         )
       ),
-      ...MONTH_WINDOWS_DAYS.map((days) => searchCount(title, days)),
+      ...MONTH_WINDOWS_DAYS.map((days) => orNull(searchCount(title, days))),
     ]);
 
-  const states = (geodata.locations ?? [])
+  const states = (geodata?.locations ?? [])
     // area is ["US", "<state>"]; skip any entry without a state component
     .filter((entry) => entry.location.area.length >= 2)
     .map((entry) => ({ state: entry.location.area[1], count: entry.count }))
     .sort((a, b) => b.count - a.count);
 
-  const cumulatives = monthResults.map((result) => result.count);
+  const cumulatives = monthResults.map((result) => result?.count ?? 0);
 
   return {
     title,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import SearchForm from "@/components/SearchForm";
 import SignOutButton from "@/components/SignOutButton";
 import JobsMap, { MapSkeleton } from "@/components/JobsMap";
@@ -12,11 +12,15 @@ import AdjacentTitles, {
 } from "@/components/AdjacentTitles";
 import type { AdjacentTitle } from "@/lib/adjacent-titles";
 import type { JobsPayload } from "@/lib/adzuna";
+import { normalizeTitle } from "@/lib/adzuna";
 
 type JobsResponse = JobsPayload & { fetchedAt: string; cached: boolean };
 
 const FRIENDLY_ERROR =
   "Job data is temporarily unavailable. Try again shortly.";
+
+const MAX_RECENT = 8;
+const RECENT_KEY = "career-explorer:recent-searches";
 
 function broaderTerm(title: string): string | null {
   const parts = title.trim().split(/\s+/);
@@ -43,8 +47,55 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [adjacent, setAdjacent] = useState<AdjacentTitle[] | null>(null);
   const [adjacentLoading, setAdjacentLoading] = useState(false);
+  const [recent, setRecent] = useState<string[]>([]);
   const requestId = useRef(0);
   const lastTitle = useRef("");
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(RECENT_KEY);
+      if (!raw) return;
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        Array.isArray(parsed) &&
+        parsed.every((item) => typeof item === "string")
+      ) {
+        setRecent(parsed);
+      }
+    } catch {
+      // Ignore a corrupt session entry; start with an empty list.
+    }
+  }, []);
+
+  function persistRecent(next: string[]) {
+    try {
+      sessionStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    } catch {
+      // Private mode can block sessionStorage; in-memory list still works.
+    }
+  }
+
+  function rememberSearch(title: string) {
+    const key = normalizeTitle(title);
+    setRecent((prev) => {
+      const next = [key, ...prev.filter((item) => item !== key)].slice(
+        0,
+        MAX_RECENT
+      );
+      persistRecent(next);
+      return next;
+    });
+  }
+
+  function forgetSearch(title: string) {
+    const key = normalizeTitle(title);
+    setRecent((prev) => {
+      const next = prev.filter((item) => item !== key);
+      persistRecent(next);
+      return next;
+    });
+  }
 
   async function search(title: string) {
     const query = title.trim();
@@ -53,14 +104,22 @@ export default function Home() {
     const id = ++requestId.current;
     lastTitle.current = query;
     setInput(query);
+    rememberSearch(query);
     setLoading(true);
     setError(null);
     setAdjacent(null);
     setAdjacentLoading(true);
 
-    const jobsReq = fetch(`/api/jobs?title=${encodeURIComponent(query)}`);
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    const jobsReq = fetch(`/api/jobs?title=${encodeURIComponent(query)}`, {
+      signal: ac.signal,
+    });
     const adjReq = fetch(
-      `/api/adjacent-titles?title=${encodeURIComponent(query)}`
+      `/api/adjacent-titles?title=${encodeURIComponent(query)}`,
+      { signal: ac.signal }
     );
 
     try {
@@ -75,7 +134,12 @@ export default function Home() {
       }
     } catch (err) {
       console.error("[career-explorer] /api/jobs request failed:", err);
-      if (id !== requestId.current) return;
+      if (
+        (err instanceof Error && err.name === "AbortError") ||
+        id !== requestId.current
+      ) {
+        return;
+      }
       setData(null);
       setError(FRIENDLY_ERROR);
     } finally {
@@ -90,12 +154,24 @@ export default function Home() {
         res.ok && Array.isArray(json.adjacentTitles) ? json.adjacentTitles : []
       );
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       console.error("[career-explorer] /api/adjacent-titles request failed:", err);
       if (id !== requestId.current) return;
       setAdjacent([]);
     } finally {
       if (id === requestId.current) setAdjacentLoading(false);
     }
+  }
+
+  function goHome() {
+    abortRef.current?.abort();
+    requestId.current += 1;
+    setInput("");
+    setLoading(false);
+    setData(null);
+    setError(null);
+    setAdjacent(null);
+    setAdjacentLoading(false);
   }
 
   const searched = loading || data !== null || error !== null;
@@ -108,6 +184,8 @@ export default function Home() {
       onChange={setInput}
       onSearch={search}
       busy={loading}
+      recent={recent}
+      onRemoveRecent={forgetSearch}
     />
   );
 
@@ -128,7 +206,13 @@ export default function Home() {
     <main className="flex flex-1 flex-col">
       <header className="border-b border-teal-tint">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-6 px-6 py-4">
-          <span className="font-display text-xl text-ink">Career Explorer</span>
+          <button
+            type="button"
+            onClick={goHome}
+            className="font-display text-xl text-ink outline-none hover:text-teal focus-visible:ring-2 focus-visible:ring-teal"
+          >
+            Career Explorer
+          </button>
           <div className="max-w-xl flex-1">{searchForm}</div>
           <SignOutButton />
         </div>
