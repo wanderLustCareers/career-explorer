@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import SearchForm from "@/components/SearchForm";
+import SignOutButton from "@/components/SignOutButton";
 import JobsMap, { MapSkeleton } from "@/components/JobsMap";
 import TrendChart, { ChartSkeleton } from "@/components/TrendChart";
 import SalarySnapshot, { SalarySkeleton } from "@/components/SalarySnapshot";
@@ -113,7 +114,10 @@ export default function Home() {
   // Pre-search state (PRD §13.2, first wireframe): centered, minimal.
   if (!searched) {
     return (
-      <main className="flex flex-1 flex-col items-center justify-center gap-8 px-6">
+      <main className="relative flex flex-1 flex-col items-center justify-center gap-8 px-6">
+        <div className="absolute right-6 top-4">
+          <SignOutButton />
+        </div>
         <h1 className="font-display text-5xl text-ink">Career Explorer</h1>
         <div className="w-full max-w-xl">{searchForm}</div>
       </main>
@@ -126,6 +130,7 @@ export default function Home() {
         <div className="mx-auto flex w-full max-w-6xl items-center gap-6 px-6 py-4">
           <span className="font-display text-xl text-ink">Career Explorer</span>
           <div className="max-w-xl flex-1">{searchForm}</div>
+          <SignOutButton />
         </div>
       </header>
 

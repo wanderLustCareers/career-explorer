@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchJobsData, normalizeTitle, type JobsPayload } from "@/lib/adzuna";
 import { readFreshRow, writeCacheRow } from "@/lib/cache";
+import { getAuthUser } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
+  if (!(await getAuthUser())) {
+    return NextResponse.json(
+      { error: "Sign in to continue." },
+      { status: 401 }
+    );
+  }
+
   const rawTitle = request.nextUrl.searchParams.get("title");
   if (!rawTitle || rawTitle.trim() === "") {
     return NextResponse.json(

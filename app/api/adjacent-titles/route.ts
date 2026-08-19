@@ -8,6 +8,7 @@ import {
 } from "@/lib/adzuna";
 import { readFreshRow, readFreshRows, writeCacheRow } from "@/lib/cache";
 import { CATEGORY_TITLES, type AdjacentTitle } from "@/lib/adjacent-titles";
+import { getAuthUser } from "@/lib/supabase/server";
 
 const MAX_SUGGESTIONS = 5; // FR5: 3-5 adjacent titles
 
@@ -74,6 +75,13 @@ async function resolveCounts(candidates: string[]): Promise<AdjacentTitle[]> {
 }
 
 export async function GET(request: NextRequest) {
+  if (!(await getAuthUser())) {
+    return NextResponse.json(
+      { error: "Sign in to continue." },
+      { status: 401 }
+    );
+  }
+
   const rawTitle = request.nextUrl.searchParams.get("title");
   if (!rawTitle || rawTitle.trim() === "") {
     return NextResponse.json(
