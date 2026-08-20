@@ -42,6 +42,10 @@ const MAP_STYLES: google.maps.MapTypeStyle[] = [
   },
 ];
 
+function formatCount(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
 function lerpColor(from: string, to: string, t: number): string {
   const a = parseInt(from.slice(1), 16);
   const b = parseInt(to.slice(1), 16);
@@ -251,12 +255,53 @@ export default function JobsMap({ states, animationKey }: JobsMapProps) {
           <>
             <span className="text-ink">{hovered.label}</span>{" "}
             <span className="font-mono font-medium text-teal">
-              {hovered.count.toLocaleString("en-US")}
+              {formatCount(hovered.count)}
             </span>{" "}
             <span className="text-slate">postings</span>
           </>
         )}
       </div>
+
+      <aside
+        aria-label="Map color legend"
+        className="pointer-events-none absolute bottom-4 left-4 z-10 w-44 rounded-xl border border-teal-tint bg-white/95 px-3 py-2.5"
+      >
+        <p className="text-xs font-medium text-ink">Postings by state</p>
+        <div
+          className="mt-2 h-2.5 w-full rounded-full"
+          style={{
+            background: `linear-gradient(to right, ${LIGHT_TEAL}, ${DEEP_TEAL})`,
+          }}
+        />
+        <div className="mt-1 flex justify-between font-mono text-[11px] text-slate">
+          <span>0</span>
+          <span>{formatCount(maxStateCount)}</span>
+        </div>
+        <div className="mt-2 flex items-start gap-2 text-xs text-slate">
+          <span
+            className="mt-0.5 inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+            style={{ backgroundColor: AMBER }}
+            aria-hidden="true"
+          />
+          <span>
+            Highest volume
+            {topStateName ? (
+              <>
+                {" — "}
+                <span className="text-ink">{topStateName}</span>
+              </>
+            ) : null}
+          </span>
+        </div>
+        <div className="mt-1.5 flex items-center gap-2 text-xs text-slate">
+          <span
+            className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-teal-tint"
+            style={{ backgroundColor: LIGHT_TEAL, opacity: 0.35 }}
+            aria-hidden="true"
+          />
+          <span>No postings</span>
+        </div>
+      </aside>
     </div>
   );
 }

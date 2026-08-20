@@ -224,6 +224,59 @@ function monthlyFromCumulative(
 }
 
 /**
+ * Failed Adzuna windows arrive as null. Treating them as 0 makes
+ * monthly diffs dump an entire cumulative into one month. Interpolate
+ * gaps, then enforce non-decreasing cumulatives (30d ≤ 60d ≤ … ≤ 365d).
+ */
+function repairCumulatives(raw: (number | null)[]): number[] {
+  const values: (number | null)[] = [...raw];
+  const known: number[] = [];
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] !== null) known.push(i);
+  }
+
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] !== null) continue;
+    let prev: number | undefined;
+    let next: number | undefined;
+    for (const index of known) {
+      if (index < i) prev = index;
+      if (index > i && next === undefined) next = index;
+    }
+    if (prev !== undefined && next !== undefined) {
+      const t = (i - prev) / (next - prev);
+      values[i] = Math.round(
+        values[prev]! + t * (values[next]! - values[prev]!)
+      );
+    } else if (prev !== undefined) {
+      values[i] = values[prev]!;
+    } else if (next !== undefined) {
+      values[i] = values[next]!;
+    } else {
+      values[i] = 0;
+    }
+  }
+
+  const repaired = values as number[];
+  for (let i = 1; i < repaired.length; i++) {
+    if (repaired[i] < repaired[i - 1]) repaired[i] = repaired[i - 1];
+  }
+  return repaired;
+}
+
+/** True when differenced months don't add back up to the 12-month cumulative. */
+export function trendSeriesIsBroken(
+  payload: Pick<JobsPayload, "counts" | "monthlyCounts">
+): boolean {
+  const monthly = payload.monthlyCounts;
+  if (!monthly || monthly.length === 0) return true;
+  const months12 = payload.counts.months12;
+  if (months12 <= 0) return false;
+  const sum = monthly.reduce((total, point) => total + point.count, 0);
+  return Math.abs(sum - months12) > Math.max(10, months12 * 0.05);
+}
+
+/**
  * Fetches everything the dashboard needs for one title.
  * Makes 16 Adzuna calls in parallel (12 monthly count windows + total,
  * geodata, histogram, history). The 24h cache (FR2) keeps this within
@@ -258,19 +311,22 @@ export async function fetchJobsData(title: string): Promise<JobsPayload> {
     .map((entry) => ({ state: entry.location.area[1], count: entry.count }))
     .sort((a, b) => b.count - a.count);
 
-  const cumulatives = monthResults.map((result) => result?.count ?? 0);
+  const rawCumulatives = monthResults.map((result) => result?.count ?? null);
+  const cumulatives = repairCumulatives(rawCumulatives);
+  const monthlyCounts = monthlyFromCumulative(cumulatives);
+  const counts = {
+    months3: cumulatives[2] ?? 0,
+    months6: cumulatives[5] ?? 0,
+    months12: cumulatives[11] ?? 0,
+  };
 
   return {
     title,
     category: modalCategory(total),
     totalCount: total.count,
     meanSalary: total.mean ?? null,
-    counts: {
-      months3: cumulatives[2] ?? 0,
-      months6: cumulatives[5] ?? 0,
-      months12: cumulatives[11] ?? 0,
-    },
-    monthlyCounts: monthlyFromCumulative(cumulatives),
+    counts,
+    monthlyCounts,
     salaryHistogram: histogram?.histogram ?? null,
     salaryHistoryByMonth: history?.month ?? null,
     states,

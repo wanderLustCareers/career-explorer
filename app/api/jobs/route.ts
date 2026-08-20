@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchJobsData, normalizeTitle, type JobsPayload } from "@/lib/adzuna";
+import {
+  fetchJobsData,
+  normalizeTitle,
+  trendSeriesIsBroken,
+  type JobsPayload,
+} from "@/lib/adzuna";
 import { readFreshRow, writeCacheRow } from "@/lib/cache";
 import { getAuthUser } from "@/lib/supabase/server";
 
@@ -25,7 +30,12 @@ export async function GET(request: NextRequest) {
   // the monthly series the trend chart needs. Older rows are treated as
   // stale so the next search backfills without waiting out the 24h TTL.
   const cached = await readFreshRow<JobsPayload>(title);
-  if (cached?.results.monthlyCounts && cached.results.monthlyCounts.length > 0) {
+  const cacheUsable =
+    !!cached?.results.monthlyCounts &&
+    cached.results.monthlyCounts.length > 0 &&
+    !trendSeriesIsBroken(cached.results);
+
+  if (cached && cacheUsable) {
     return NextResponse.json({
       ...cached.results,
       fetchedAt: cached.fetchedAt,
