@@ -59,6 +59,35 @@ function lerpColor(from: string, to: string, t: number): string {
     .padStart(6, "0")}`;
 }
 
+const TEAL_STEPS = 4;
+
+/** Discrete legend bands matching the map's sqrt teal scale. */
+function tealGrades(
+  maxCount: number
+): { color: string; lo: number; hi: number }[] {
+  if (maxCount <= 0) return [];
+  const steps = Math.min(TEAL_STEPS, maxCount);
+  const grades: { color: string; lo: number; hi: number }[] = [];
+  let prevHi = 0;
+  for (let i = 0; i < steps; i++) {
+    const t0 = i / steps;
+    const t1 = (i + 1) / steps;
+    const hi =
+      i === steps - 1
+        ? maxCount
+        : Math.max(prevHi + 1, Math.round(t1 * t1 * maxCount));
+    const lo = prevHi + 1;
+    if (lo > hi) continue;
+    grades.push({
+      color: lerpColor(LIGHT_TEAL, DEEP_TEAL, (t0 + t1) / 2),
+      lo,
+      hi,
+    });
+    prevHi = hi;
+  }
+  return grades;
+}
+
 /**
  * PRD §13.4 loading state: teal-tint skeleton shapes, not a spinner.
  * The actual US silhouette (from the same GeoJSON as the live map) with
@@ -145,6 +174,10 @@ export default function JobsMap({ states, animationKey }: JobsMapProps) {
     (best, s) => (s.count > (best?.count ?? 0) ? s : best),
     null as StateCount | null
   )?.state;
+  const grades = useMemo(
+    () => tealGrades(maxStateCount > 1 ? maxStateCount - 1 : maxStateCount),
+    [maxStateCount]
+  );
 
   // Choropleth styling; re-applied as counts change and during the entrance.
   useEffect(() => {
@@ -264,43 +297,53 @@ export default function JobsMap({ states, animationKey }: JobsMapProps) {
 
       <aside
         aria-label="Map color legend"
-        className="pointer-events-none absolute bottom-4 left-4 z-10 w-44 rounded-xl border border-teal-tint bg-white/95 px-3 py-2.5"
+        className="pointer-events-none absolute bottom-8 left-4 z-10 w-52 rounded-xl border border-teal-tint bg-white/95 px-3 py-2.5"
       >
         <p className="text-xs font-medium text-ink">Postings by state</p>
-        <div
-          className="mt-2 h-2.5 w-full rounded-full"
-          style={{
-            background: `linear-gradient(to right, ${LIGHT_TEAL}, ${DEEP_TEAL})`,
-          }}
-        />
-        <div className="mt-1 flex justify-between font-mono text-[11px] text-slate">
-          <span>0</span>
-          <span>{formatCount(maxStateCount)}</span>
-        </div>
-        <div className="mt-2 flex items-start gap-2 text-xs text-slate">
-          <span
-            className="mt-0.5 inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
-            style={{ backgroundColor: AMBER }}
-            aria-hidden="true"
-          />
-          <span>
-            Highest volume
-            {topStateName ? (
-              <>
-                {" — "}
-                <span className="text-ink">{topStateName}</span>
-              </>
-            ) : null}
-          </span>
-        </div>
-        <div className="mt-1.5 flex items-center gap-2 text-xs text-slate">
-          <span
-            className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-teal-tint"
-            style={{ backgroundColor: LIGHT_TEAL, opacity: 0.35 }}
-            aria-hidden="true"
-          />
-          <span>No postings</span>
-        </div>
+        <ul className="mt-2 flex flex-col gap-1.5">
+          <li className="flex items-center gap-2 text-xs text-slate">
+            <span
+              className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-teal-tint"
+              style={{ backgroundColor: LIGHT_TEAL, opacity: 0.35 }}
+              aria-hidden="true"
+            />
+            <span className="font-mono">0</span>
+          </li>
+          {grades.map((grade) => (
+            <li
+              key={`${grade.lo}-${grade.hi}`}
+              className="flex items-center gap-2 text-xs text-slate"
+            >
+              <span
+                className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                style={{ backgroundColor: grade.color }}
+                aria-hidden="true"
+              />
+              <span className="font-mono">
+                {grade.lo === grade.hi
+                  ? formatCount(grade.lo)
+                  : `${formatCount(grade.lo)}–${formatCount(grade.hi)}`}
+              </span>
+            </li>
+          ))}
+          <li className="flex items-start gap-2 text-xs text-slate">
+            <span
+              className="mt-0.5 inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+              style={{ backgroundColor: AMBER }}
+              aria-hidden="true"
+            />
+            <span>
+              <span className="font-mono">{formatCount(maxStateCount)}</span>
+              {" · Highest volume"}
+              {topStateName ? (
+                <>
+                  {" — "}
+                  <span className="text-ink">{topStateName}</span>
+                </>
+              ) : null}
+            </span>
+          </li>
+        </ul>
       </aside>
     </div>
   );
